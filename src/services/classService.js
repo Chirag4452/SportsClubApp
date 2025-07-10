@@ -200,6 +200,20 @@ class ClassService {
     }
 
     /**
+     * Get upcoming classes (next N days)
+     * @param {number} [days=7] - Number of days to look ahead
+     * @returns {Promise<Object>} Upcoming classes or error
+     */
+    async getUpcomingClasses(days = 7) {
+        const today = new Date().toISOString().split('T')[0];
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + days);
+        const endDateString = endDate.toISOString().split('T')[0];
+        
+        return this.getClassesInDateRange(today, endDateString);
+    }
+
+    /**
      * Update a class
      * @param {string} classId - Class document ID
      * @param {Object} updateData - Data to update
@@ -366,4 +380,26 @@ export const getDateString = (date = new Date()) => {
 // Helper to get time in HH:MM format
 export const getTimeString = (date = new Date()) => {
     return date.toTimeString().split(' ')[0].substring(0, 5);
-}; 
+};
+
+// Helper function to get color for each sport
+export const getSportColor = (sport) => {
+    const colors = {
+        'Football': '#ff6b35',
+        'Basketball': '#f7931e',
+        'Tennis': '#8bc34a',
+        'Swimming': '#03a9f4',
+        'Volleyball': '#9c27b0',
+        'Baseball': '#795548',
+        'Soccer': '#4caf50',
+        'Golf': '#ff9800',
+        'Track & Field': '#e91e63',
+        'Wrestling': '#3f51b5',
+        'Gymnastics': '#9e9e9e',
+        'Other': '#607d8b'
+    };
+    return colors[sport] || '#6b7280'; // Default gray color
+};
+
+// Alias for formatTime to match the import in AttendanceScreen
+export const formatClassTime = formatTime; 
