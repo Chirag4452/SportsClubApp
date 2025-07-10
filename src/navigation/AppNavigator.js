@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import context and screens
@@ -55,7 +55,11 @@ const MainTabNavigator = () => {
                         iconName = focused ? 'people' : 'people-outline';
                     }
 
-                    return <Ionicons name={iconName} size={size} color={color} />;
+                    return (
+                        <View style={{ marginTop: 2 }}>
+                            <Ionicons name={iconName} size={size} color={color} />
+                        </View>
+                    );
                 },
                 // Tab bar styling
                 tabBarActiveTintColor: '#3b82f6',
@@ -64,9 +68,9 @@ const MainTabNavigator = () => {
                     backgroundColor: '#ffffff',
                     borderTopWidth: 1,
                     borderTopColor: '#e5e7eb',
-                    paddingBottom: 8,
-                    paddingTop: 8,
-                    height: 60,
+                    paddingBottom: Platform.OS === 'ios' ? 25 : 20, // Extra padding for iOS home indicator
+                    paddingTop: 12, // Increased from 8 to 12 to move icons higher
+                    height: Platform.OS === 'ios' ? 90 : 85, // Slightly taller on iOS for home indicator
                     shadowColor: '#000',
                     shadowOffset: {
                         width: 0,
@@ -79,6 +83,7 @@ const MainTabNavigator = () => {
                 tabBarLabelStyle: {
                     fontSize: 12,
                     fontWeight: '600',
+                    marginBottom: 4, // Add margin to position labels better
                 },
                 // Hide header since we have custom headers in each screen
                 headerShown: false,

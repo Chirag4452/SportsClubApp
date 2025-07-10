@@ -23,7 +23,7 @@ try {
 }
 // Custom dropdown component since we removed the picker package
 import { useAuth } from '../context/AuthContext';
-import { classService, SPORTS_OPTIONS, getDateString, getTimeString } from '../services/classService';
+import { classService, SPORTS_OPTIONS, TIME_OPTIONS, getDateString, getTimeString } from '../services/classService';
 
 const AddClassModal = ({ visible, onClose, onClassAdded }) => {
     const { user } = useAuth();
@@ -33,7 +33,7 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
         title: '',
         sport: SPORTS_OPTIONS[0],
         date: getDateString(),
-        time: '09:00',
+        time: TIME_OPTIONS[0], // Now using standardized batch time
         description: '',
         maxParticipants: '20',
     });
@@ -42,7 +42,7 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState({});
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
+    const [showTimeDropdown, setShowTimeDropdown] = useState(false);
     const [showSportDropdown, setShowSportDropdown] = useState(false);
 
     // Reset form when modal opens/closes
@@ -57,7 +57,7 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
             title: '',
             sport: SPORTS_OPTIONS[0],
             date: getDateString(),
-            time: '09:00',
+            time: TIME_OPTIONS[0], // Now using standardized batch time
             description: '',
             maxParticipants: '20',
         });
@@ -117,6 +117,12 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
         setShowSportDropdown(false);
     };
 
+    // Time selection handler
+    const handleTimeSelect = (time) => {
+        handleInputChange('time', time);
+        setShowTimeDropdown(false);
+    };
+
     // Form validation
     const validateForm = () => {
         const newErrors = {};
@@ -148,14 +154,9 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
             }
         }
 
-        // Time validation
+        // Time validation - now using standardized batch options
         if (!formData.time) {
-            newErrors.time = 'Time is required';
-        } else {
-            const timeRegex = /^([01]?\d|2[0-3]):[0-5]\d$/;
-            if (!timeRegex.test(formData.time)) {
-                newErrors.time = 'Time must be in HH:MM format (24-hour)';
-            }
+            newErrors.time = 'Please select a batch time';
         }
 
         // Max participants validation
@@ -323,34 +324,17 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
                         {errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
                     </View>
 
-                    {/* Time Selection */}
+                    {/* Time Selection - Now using standardized batch dropdown */}
                     <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Time *</Text>
-                        {DateTimePicker ? (
-                            <TouchableOpacity
-                                style={[styles.dateTimeButton, errors.time && styles.inputError]}
-                                onPress={() => setShowTimePicker(true)}
-                                disabled={isLoading}
-                            >
-                                <Text style={styles.dateTimeText}>
-                                    {formatDisplayTime(formData.time)}
-                                </Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <TextInput
-                                style={[styles.input, errors.time && styles.inputError]}
-                                value={formData.time}
-                                onChangeText={handleTimeTextChange}
-                                placeholder="HH:MM (e.g., 14:30)"
-                                placeholderTextColor="#9ca3af"
-                                editable={!isLoading}
-                                keyboardType="numeric"
-                                maxLength={5}
-                            />
-                        )}
-                        {!DateTimePicker && (
-                            <Text style={styles.helperText}>Enter time in 24-hour format (HH:MM)</Text>
-                        )}
+                        <Text style={styles.label}>Batch Time *</Text>
+                        <TouchableOpacity
+                            style={[styles.dropdownButton, errors.time && styles.inputError]}
+                            onPress={() => setShowTimeDropdown(true)}
+                            disabled={isLoading}
+                        >
+                            <Text style={styles.dropdownText}>{formData.time}</Text>
+                            <Ionicons name="chevron-down" size={20} color="#6b7280" />
+                        </TouchableOpacity>
                         {errors.time && <Text style={styles.errorText}>{errors.time}</Text>}
                     </View>
 
@@ -396,7 +380,7 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
                     </View>
                 </ScrollView>
 
-                {/* Date/Time Pickers - Only show if DateTimePicker is available */}
+                {/* Date Picker - Only show if DateTimePicker is available */}
                 {DateTimePicker && showDatePicker && (
                     <DateTimePicker
                         value={new Date(formData.date)}
@@ -404,15 +388,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         onChange={handleDateChange}
                         minimumDate={new Date()}
-                    />
-                )}
-
-                {DateTimePicker && showTimePicker && (
-                    <DateTimePicker
-                        value={new Date(`2000-01-01T${formData.time}:00`)}
-                        mode="time"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={handleTimeChange}
                     />
                 )}
 
@@ -453,6 +428,53 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
                                             {item}
                                         </Text>
                                         {formData.sport === item && (
+                                            <Ionicons name="checkmark" size={20} color="#3b82f6" />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                                showsVerticalScrollIndicator={false}
+                            />
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
+
+                {/* Time/Batch Selection Modal */}
+                <Modal
+                    visible={showTimeDropdown}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowTimeDropdown(false)}
+                >
+                    <TouchableOpacity 
+                        style={styles.modalOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowTimeDropdown(false)}
+                    >
+                        <View style={styles.dropdownModal}>
+                            <View style={styles.dropdownHeader}>
+                                <Text style={styles.dropdownTitle}>Select Batch Time</Text>
+                                <TouchableOpacity onPress={() => setShowTimeDropdown(false)}>
+                                    <Ionicons name="close" size={24} color="#6b7280" />
+                                </TouchableOpacity>
+                            </View>
+                            <FlatList
+                                data={TIME_OPTIONS}
+                                keyExtractor={(item) => item}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.sportOption,
+                                            formData.time === item && styles.selectedSportOption
+                                        ]}
+                                        onPress={() => handleTimeSelect(item)}
+                                    >
+                                        <Text style={[
+                                            styles.sportOptionText,
+                                            formData.time === item && styles.selectedSportText
+                                        ]}>
+                                            {item}
+                                        </Text>
+                                        {formData.time === item && (
                                             <Ionicons name="checkmark" size={20} color="#3b82f6" />
                                         )}
                                     </TouchableOpacity>

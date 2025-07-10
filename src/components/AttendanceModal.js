@@ -86,11 +86,47 @@ const AttendanceModal = ({
                 throw new Error(studentsResult.error);
             }
 
-            // Filter students by batch time if needed
-            const filteredStudents = studentsResult.data.filter(student => 
-                student.batch_time === selectedClass.time || 
-                !selectedClass.time // If no specific time, include all
-            );
+            // Helper function to normalize batch times for comparison
+            const normalizeBatchTime = (batchTime) => {
+                if (!batchTime) return '';
+                
+                // Convert old format to new format for comparison
+                const batchMappings = {
+                    'Morning (8-10)': 'Morning batch (8:00-10:00)',
+                    'Evening (4-6)': 'Evening batch (4:00-6:00)',
+                    // Add any other old formats you might have
+                    '06:00 - 07:00': 'Morning batch (8:00-10:00)', // Legacy morning
+                    '16:00 - 18:00': 'Evening batch (4:00-6:00)',  // Legacy evening
+                    '08:00 - 10:00': 'Morning batch (8:00-10:00)', // Alternative morning
+                    '04:00 - 06:00': 'Evening batch (4:00-6:00)',  // Alternative evening
+                };
+                
+                // Return mapped value if exists, otherwise return original
+                return batchMappings[batchTime] || batchTime;
+            };
+
+            // Filter students by batch time with smart format matching
+            const filteredStudents = studentsResult.data.filter(student => {
+                if (!selectedClass.time) {
+                    return true; // If no specific time, include all students
+                }
+                
+                // Normalize both class and student batch times for comparison
+                const normalizedClassTime = normalizeBatchTime(selectedClass.time);
+                const normalizedStudentTime = normalizeBatchTime(student.batch_time);
+                
+                const matches = normalizedStudentTime === normalizedClassTime;
+                
+                // Debug log for the problematic case
+                if (student.batch_time && selectedClass.time) {
+                    console.log(`🔄 Batch matching for ${student.name}:`);
+                    console.log(`   Student: "${student.batch_time}" → "${normalizedStudentTime}"`);
+                    console.log(`   Class: "${selectedClass.time}" → "${normalizedClassTime}"`);
+                    console.log(`   Match: ${matches}`);
+                }
+                
+                return matches;
+            });
 
             setStudents(filteredStudents);
             console.log(`👥 Found ${filteredStudents.length} students for this class`);

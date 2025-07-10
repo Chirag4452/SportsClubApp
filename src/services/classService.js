@@ -19,6 +19,12 @@ export const SPORTS_OPTIONS = [
     'Other'
 ];
 
+// Time/Batch options for dropdown (matching student batch times)
+export const TIME_OPTIONS = [
+    'Morning batch (8:00-10:00)',
+    'Evening batch (4:00-6:00)'
+];
+
 /**
  * Class data structure:
  * {
@@ -361,11 +367,25 @@ export const formatDate = (date) => {
 
 export const formatTime = (time) => {
     if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+    
+    // If it's a descriptive batch name (contains "batch"), return as-is
+    if (time.includes('batch')) {
+        return time;
+    }
+    
+    // Otherwise, format as traditional time (for backward compatibility)
+    if (time.includes(':') && time.split(':').length === 2) {
+        const [hours, minutes] = time.split(':');
+        const hour = parseInt(hours, 10);
+        if (!isNaN(hour)) {
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${minutes} ${ampm}`;
+        }
+    }
+    
+    // Fallback: return the time as-is
+    return time;
 };
 
 export const formatDateTime = (date, time) => {
