@@ -31,17 +31,17 @@ Add the following attributes to your `classes` collection:
 
 ### String Attributes
 
-| Attribute Key | Size | Required | Default | Array |
-|---------------|------|----------|---------|-------|
-| `title` | 100 | ✅ Yes | - | ❌ No |
-| `sport` | 50 | ✅ Yes | - | ❌ No |
-| `date` | 10 | ✅ Yes | - | ❌ No |
-| `time` | 5 | ✅ Yes | - | ❌ No |
-| `instructor` | 100 | ✅ Yes | - | ❌ No |
-| `instructor_id` | 50 | ✅ Yes | - | ❌ No |
-| `description` | 500 | ❌ No | - | ❌ No |
-| `created_at` | 30 | ✅ Yes | - | ❌ No |
-| `updated_at` | 30 | ✅ Yes | - | ❌ No |
+| Attribute Key | Size | Required | Default | Array | Note |
+|---------------|------|----------|---------|-------|------|
+| `title` | 100 | ✅ Yes | - | ❌ No | |
+| `sport` | 50 | ✅ Yes | - | ❌ No | Auto-set to "Football" (single-sport app) |
+| `date` | 10 | ✅ Yes | - | ❌ No | |
+| `time` | 5 | ✅ Yes | - | ❌ No | |
+| `instructor` | 100 | ✅ Yes | - | ❌ No | |
+| `instructor_id` | 50 | ✅ Yes | - | ❌ No | |
+| `description` | 500 | ❌ No | - | ❌ No | |
+| `created_at` | 30 | ✅ Yes | - | ❌ No | |
+| `updated_at` | 30 | ✅ Yes | - | ❌ No | |
 
 ### Integer Attributes
 

@@ -19,7 +19,7 @@ import {
     formatPhoneNumber, 
     formatEnrollmentDate, 
     getStudentStatusColor, 
-    getSportColor 
+    formatAgeWithDOB
 } from '../services/studentService';
 import AddStudentModal from '../components/AddStudentModal';
 
@@ -34,11 +34,6 @@ const StudentsScreen = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [stats, setStats] = useState({
-        totalStudents: 0,
-        activeStudents: 0,
-        recentEnrollments: 0,
-    });
     
     const { logout, userName } = useAuth();
 
@@ -54,7 +49,6 @@ const StudentsScreen = () => {
             
             // Reload data when students are updated
             loadStudents();
-            loadStats();
         });
 
         return () => {
@@ -72,8 +66,7 @@ const StudentsScreen = () => {
             const filtered = students.filter(student =>
                 student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                student.phone.includes(searchQuery) ||
-                student.sport.toLowerCase().includes(searchQuery.toLowerCase())
+                student.phone.includes(searchQuery)
             );
             setFilteredStudents(filtered);
         }
@@ -85,10 +78,7 @@ const StudentsScreen = () => {
         setError(null);
 
         try {
-            await Promise.all([
-                loadStudents(),
-                loadStats()
-            ]);
+            await loadStudents();
         } catch (error) {
             console.error('Error loading initial data:', error);
             setError('Failed to load student data');
@@ -118,20 +108,7 @@ const StudentsScreen = () => {
         }
     };
 
-    // Load statistics
-    const loadStats = async () => {
-        try {
-            const result = await studentService.getStudentStats();
-            
-            if (result.success) {
-                setStats(result.data);
-            } else {
-                console.error('Error loading stats:', result.error);
-            }
-        } catch (error) {
-            console.error('Error loading stats:', error);
-        }
-    };
+
 
     // Handle refresh
     const handleRefresh = useCallback(async () => {
@@ -183,9 +160,6 @@ const StudentsScreen = () => {
                 <View style={styles.studentInfo}>
                     <Text style={styles.studentName}>{student.name}</Text>
                     <View style={styles.studentBadges}>
-                        <View style={[styles.sportBadge, { backgroundColor: getSportColor(student.sport) }]}>
-                            <Text style={styles.badgeText}>{student.sport}</Text>
-                        </View>
                         <View style={styles.batchBadge}>
                             <Text style={styles.batchText}>{student.batch_time}</Text>
                         </View>
@@ -206,7 +180,7 @@ const StudentsScreen = () => {
                     </View>
                     <View style={styles.contactItem}>
                         <Ionicons name="person-outline" size={14} color="#6b7280" />
-                        <Text style={styles.contactText}>Age {student.age}</Text>
+                        <Text style={styles.contactText}>{formatAgeWithDOB(student.date_of_birth)}</Text>
                     </View>
                 </View>
                 
@@ -258,7 +232,7 @@ const StudentsScreen = () => {
                     style={styles.searchInput}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    placeholder="Search students by name, email, phone, or sport"
+                    placeholder="Search students by name, email, or phone"
                     placeholderTextColor="#9ca3af"
                 />
                 {searchQuery.length > 0 && (
@@ -327,24 +301,6 @@ const StudentsScreen = () => {
                             <Ionicons name="log-out-outline" size={18} color="#ffffff" />
                         )}
                     </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* Stats Section */}
-            <View style={styles.statsSection}>
-                <View style={styles.statsGrid}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{stats.totalStudents}</Text>
-                        <Text style={styles.statLabel}>Total</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{stats.activeStudents}</Text>
-                        <Text style={styles.statLabel}>Active</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{stats.recentEnrollments}</Text>
-                        <Text style={styles.statLabel}>New (7d)</Text>
-                    </View>
                 </View>
             </View>
 
@@ -479,38 +435,6 @@ const styles = StyleSheet.create({
     },
     disabledButton: {
         backgroundColor: '#9ca3af',
-    },
-    statsSection: {
-        backgroundColor: '#ffffff',
-        marginHorizontal: 16,
-        marginTop: 16,
-        borderRadius: 12,
-        padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    statCard: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 8,
-    },
-    statNumber: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1f2937',
-        marginBottom: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#6b7280',
-        fontWeight: '500',
     },
     searchContainer: {
         paddingHorizontal: 16,

@@ -76,23 +76,23 @@ Create the following attributes in the exact order shown. **Attribute names must
    - **Array**: ❌ No
    - **Default**: None
 
-4. **age** (String)
-   - **Attribute ID**: `age`
+4. **date_of_birth** (String)
+   - **Attribute ID**: `date_of_birth`
    - **Type**: String
-   - **Size**: 3
+   - **Size**: 10
    - **Required**: ✅ Yes
    - **Array**: ❌ No
    - **Default**: None
+   - **Format**: YYYY-MM-DD (e.g., "1990-05-15")
 
-5. **sport** (String)
+5. **sport** (String) - *Auto-populated for single-sport app*
    - **Attribute ID**: `sport`
    - **Type**: String
    - **Size**: 50
    - **Required**: ✅ Yes
    - **Array**: ❌ No
    - **Default**: None
-   - **Allowed Values**: You can optionally set enum values:
-     - Football, Basketball, Tennis, Swimming, Volleyball, Baseball, Soccer, Golf, Track & Field, Wrestling, Gymnastics, Other
+   - **Note**: This field is automatically set to "Football" in the app code since this is a single-sport application. Users don't select sport during registration.
 
 6. **batch_time** (String)
    - **Attribute ID**: `batch_time`
@@ -190,7 +190,7 @@ For better query performance, create these indexes:
        name: "John Doe",
        phone: "(555) 123-4567",
        email: "john.doe@example.com",
-       age: "25", // String format as expected by database
+       date_of_birth: "1999-05-15", // YYYY-MM-DD format
        sport: "Football",
        batch_time: "06:00 - 07:00",
        enrollment_date: "2024-01-15",
@@ -255,9 +255,9 @@ For better query performance, create these indexes:
        "required": true
      },
      {
-       "key": "age",
+       "key": "date_of_birth",
        "type": "string",
-       "size": 3,
+       "size": 10,
        "required": true
      },
      {

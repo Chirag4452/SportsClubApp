@@ -1,5 +1,5 @@
 import { databases, DATABASE_ID, ID, Query } from '../config/appwrite';
-import { SPORTS_OPTIONS } from './classService';
+import { DEFAULT_SPORT } from './classService';
 
 // Collection ID for students - you'll need to create this collection in Appwrite
 export const STUDENTS_COLLECTION_ID = 'students';
@@ -17,7 +17,7 @@ export const BATCH_TIME_OPTIONS = [
  *   name: string
  *   phone: string
  *   email: string
- *   age: string (stored as string in database)
+ *   date_of_birth: string (YYYY-MM-DD format)
  *   sport: string
  *   batch_time: string
  *   enrollment_date?: string
@@ -35,7 +35,7 @@ class StudentService {
      * @param {string} studentData.name - Student name
      * @param {string} studentData.phone - Student phone number
      * @param {string} studentData.email - Student email
-     * @param {string} studentData.age - Student age (as string)
+     * @param {string} studentData.date_of_birth - Student date of birth (YYYY-MM-DD)
      * @param {string} studentData.sport - Sport type
      * @param {string} studentData.batch_time - Batch time
      * @param {string} [studentData.enrollment_date] - Enrollment date
@@ -51,12 +51,25 @@ class StudentService {
 
             const now = new Date().toISOString();
             
+            // Calculate age from date of birth for backward compatibility
+            const calculateAgeFromDOB = (dob) => {
+                const today = new Date();
+                const birthDate = new Date(dob);
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                return age.toString();
+            };
+
             // Only include attributes that exist in your database
             const studentDocument = {
                 name: studentData.name.trim(),
                 phone: studentData.phone.trim(),
                 email: studentData.email.trim().toLowerCase(),
-                age: studentData.age.trim(), // Keep as string since database expects string
+                date_of_birth: studentData.date_of_birth.trim(),
+                age: calculateAgeFromDOB(studentData.date_of_birth.trim()), // Temporary: calculated from DOB
                 sport: studentData.sport,
                 batch_time: studentData.batch_time,
                 created_at: now, // This attribute exists and is required
@@ -102,7 +115,6 @@ class StudentService {
     /**
      * Get all students with optional filtering
      * @param {Object} [filters] - Optional filters
-     * @param {string} [filters.sport] - Filter by sport
      * @param {string} [filters.status] - Filter by status
      * @param {string} [filters.search] - Search by name, email, or phone
      * @param {number} [filters.limit] - Limit number of results
@@ -111,11 +123,6 @@ class StudentService {
     async getStudents(filters = {}) {
         try {
             const queries = [];
-            
-            // Add sport filter if provided
-            if (filters.sport) {
-                queries.push(Query.equal('sport', filters.sport));
-            }
             
             // Add status filter if provided
             if (filters.status) {
@@ -173,12 +180,12 @@ class StudentService {
     }
 
     /**
-     * Get students by sport
-     * @param {string} sport - Sport name
+     * Get students for the app's default sport (since this is a single-sport app)
      * @returns {Promise<Object>} Students array or error
      */
-    async getStudentsBySport(sport) {
-        return this.getStudents({ sport });
+    async getStudentsBySport() {
+        // Since this is now a single-sport app, just return all students
+        return this.getStudents();
     }
 
     /**
@@ -320,21 +327,15 @@ class StudentService {
             
             const stats = {
                 totalStudents: students.length,
-                activeStudents: students.length, // Assume all are active since status might not exist
-                sportsCount: {},
-                batchTimeCount: {},
-                recentEnrollments: 0, // Set to 0 since enrollment_date might not exist
+                activeStudents: students.filter(s => s.status === 'active' || !s.status).length,
+                recentEnrollments: students.filter(s => {
+                    if (!s.enrollment_date && !s.created_at) return false;
+                    const enrollDate = new Date(s.enrollment_date || s.created_at);
+                    const sevenDaysAgo = new Date();
+                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                    return enrollDate >= sevenDaysAgo;
+                }).length,
             };
-
-            // Count students by sport
-            students.forEach(student => {
-                stats.sportsCount[student.sport] = (stats.sportsCount[student.sport] || 0) + 1;
-            });
-
-            // Count students by batch time
-            students.forEach(student => {
-                stats.batchTimeCount[student.batch_time] = (stats.batchTimeCount[student.batch_time] || 0) + 1;
-            });
 
             return { success: true, data: stats };
         } catch (error) {
@@ -375,6 +376,65 @@ class StudentService {
 
 // Export singleton instance
 export const studentService = new StudentService();
+
+/**
+ * Calculate age from date of birth
+ * @param {string} dateOfBirth - Date of birth in YYYY-MM-DD format
+ * @returns {number} Age in years
+ */
+export const calculateAge = (dateOfBirth) => {
+    if (!dateOfBirth) return 0;
+    
+    const dob = new Date(dateOfBirth);
+    const today = new Date();
+    
+    if (isNaN(dob.getTime())) return 0;
+    
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    
+    return Math.max(0, age);
+};
+
+/**
+ * Format date of birth for display
+ * @param {string} dateOfBirth - Date of birth in YYYY-MM-DD format
+ * @returns {string} Formatted date string
+ */
+export const formatDateOfBirth = (dateOfBirth) => {
+    if (!dateOfBirth) return 'N/A';
+    
+    try {
+        const date = new Date(dateOfBirth);
+        if (isNaN(date.getTime())) return dateOfBirth;
+        
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    } catch (error) {
+        return dateOfBirth;
+    }
+};
+
+/**
+ * Calculate age from date of birth and format for display
+ * @param {string} dateOfBirth - Date of birth in YYYY-MM-DD format
+ * @returns {string} Age with DOB (e.g., "25 (Born: Jan 15, 1999)")
+ */
+export const formatAgeWithDOB = (dateOfBirth) => {
+    if (!dateOfBirth) return 'Age: N/A';
+    
+    const age = calculateAge(dateOfBirth);
+    const formattedDOB = formatDateOfBirth(dateOfBirth);
+    
+    return `Age ${age} (DOB: ${formattedDOB})`;
+};
 
 // Helper functions for formatting
 export const formatPhoneNumber = (phone) => {

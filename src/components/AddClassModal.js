@@ -23,7 +23,7 @@ try {
 }
 // Custom dropdown component since we removed the picker package
 import { useAuth } from '../context/AuthContext';
-import { classService, SPORTS_OPTIONS, TIME_OPTIONS, getDateString, getTimeString } from '../services/classService';
+import { classService, DEFAULT_SPORT, TIME_OPTIONS, getDateString, getTimeString } from '../services/classService';
 
 const AddClassModal = ({ visible, onClose, onClassAdded }) => {
     const { user } = useAuth();
@@ -31,7 +31,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
     // Form state
     const [formData, setFormData] = useState({
         title: '',
-        sport: SPORTS_OPTIONS[0],
         date: getDateString(),
         time: TIME_OPTIONS[0], // Now using standardized batch time
         description: '',
@@ -43,7 +42,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
     const [errors, setErrors] = useState({});
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showTimeDropdown, setShowTimeDropdown] = useState(false);
-    const [showSportDropdown, setShowSportDropdown] = useState(false);
 
     // Reset form when modal opens/closes
     React.useEffect(() => {
@@ -55,7 +53,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
     const resetForm = () => {
         setFormData({
             title: '',
-            sport: SPORTS_OPTIONS[0],
             date: getDateString(),
             time: TIME_OPTIONS[0], // Now using standardized batch time
             description: '',
@@ -109,12 +106,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
         if (timeRegex.test(text) || text === '') {
             handleInputChange('time', text);
         }
-    };
-
-    // Sport selection handler
-    const handleSportSelect = (sport) => {
-        handleInputChange('sport', sport);
-        setShowSportDropdown(false);
     };
 
     // Time selection handler
@@ -182,7 +173,7 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
         try {
             const classData = {
                 title: formData.title.trim(),
-                sport: formData.sport,
+                sport: DEFAULT_SPORT, // Use default sport for single-sport app
                 date: formData.date,
                 time: formData.time,
                 description: formData.description.trim(),
@@ -277,20 +268,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
                             maxLength={50}
                         />
                         {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
-                    </View>
-
-                    {/* Sport Selection */}
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Sport *</Text>
-                        <TouchableOpacity
-                            style={[styles.dropdownButton, errors.sport && styles.inputError]}
-                            onPress={() => setShowSportDropdown(true)}
-                            disabled={isLoading}
-                        >
-                            <Text style={styles.dropdownText}>{formData.sport}</Text>
-                            <Ionicons name="chevron-down" size={20} color="#6b7280" />
-                        </TouchableOpacity>
-                        {errors.sport && <Text style={styles.errorText}>{errors.sport}</Text>}
                     </View>
 
                     {/* Date Selection */}
@@ -390,53 +367,6 @@ const AddClassModal = ({ visible, onClose, onClassAdded }) => {
                         minimumDate={new Date()}
                     />
                 )}
-
-                {/* Sport Selection Modal */}
-                <Modal
-                    visible={showSportDropdown}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={() => setShowSportDropdown(false)}
-                >
-                    <TouchableOpacity 
-                        style={styles.modalOverlay}
-                        activeOpacity={1}
-                        onPress={() => setShowSportDropdown(false)}
-                    >
-                        <View style={styles.dropdownModal}>
-                            <View style={styles.dropdownHeader}>
-                                <Text style={styles.dropdownTitle}>Select Sport</Text>
-                                <TouchableOpacity onPress={() => setShowSportDropdown(false)}>
-                                    <Ionicons name="close" size={24} color="#6b7280" />
-                                </TouchableOpacity>
-                            </View>
-                            <FlatList
-                                data={SPORTS_OPTIONS}
-                                keyExtractor={(item) => item}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.sportOption,
-                                            formData.sport === item && styles.selectedSportOption
-                                        ]}
-                                        onPress={() => handleSportSelect(item)}
-                                    >
-                                        <Text style={[
-                                            styles.sportOptionText,
-                                            formData.sport === item && styles.selectedSportText
-                                        ]}>
-                                            {item}
-                                        </Text>
-                                        {formData.sport === item && (
-                                            <Ionicons name="checkmark" size={20} color="#3b82f6" />
-                                        )}
-                                    </TouchableOpacity>
-                                )}
-                                showsVerticalScrollIndicator={false}
-                            />
-                        </View>
-                    </TouchableOpacity>
-                </Modal>
 
                 {/* Time/Batch Selection Modal */}
                 <Modal

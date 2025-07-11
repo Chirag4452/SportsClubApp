@@ -19,7 +19,7 @@ import {
     getAttendanceColor,
     getPaymentColor 
 } from '../services/attendanceService';
-import { studentService } from '../services/studentService';
+import { studentService, formatAgeWithDOB } from '../services/studentService';
 import { useAuth } from '../context/AuthContext';
 
 const AttendanceModal = ({ 
@@ -78,17 +78,23 @@ const AttendanceModal = ({
 
         try {
             console.log('📚 Loading attendance data for class:', selectedClass.title, 'on', classDate);
+            console.log('🔍 Class batch time:', selectedClass.time);
 
-            // Load students for this sport/batch
-            const studentsResult = await studentService.getStudentsBySport(selectedClass.sport);
+            // Load all students for attendance (single-sport app)
+            const studentsResult = await studentService.getStudentsBySport();
             
             if (!studentsResult.success) {
                 throw new Error(studentsResult.error);
             }
 
+            console.log(`📝 Total students loaded: ${studentsResult.data.length}`);
+            
             // Helper function to normalize batch times for comparison
             const normalizeBatchTime = (batchTime) => {
                 if (!batchTime) return '';
+                
+                // Clean and normalize the time string
+                let normalizedTime = batchTime.trim(); // Remove leading/trailing spaces
                 
                 // Convert old format to new format for comparison
                 const batchMappings = {
@@ -99,35 +105,52 @@ const AttendanceModal = ({
                     '16:00 - 18:00': 'Evening batch (4:00-6:00)',  // Legacy evening
                     '08:00 - 10:00': 'Morning batch (8:00-10:00)', // Alternative morning
                     '04:00 - 06:00': 'Evening batch (4:00-6:00)',  // Alternative evening
+                    '4:00-6:00': 'Evening batch (4:00-6:00)',     // No spaces variant
+                    '8:00-10:00': 'Morning batch (8:00-10:00)',   // No spaces variant
                 };
                 
-                // Return mapped value if exists, otherwise return original
-                return batchMappings[batchTime] || batchTime;
+                // Return mapped value if exists, otherwise return cleaned original
+                return batchMappings[normalizedTime] || normalizedTime;
+            };
+            
+            // More robust time comparison function
+            const timeMatches = (studentTime, classTime) => {
+                if (!studentTime || !classTime) return false;
+                
+                const normalizedStudentTime = normalizeBatchTime(studentTime);
+                const normalizedClassTime = normalizeBatchTime(classTime);
+                
+                // Exact match
+                if (normalizedStudentTime === normalizedClassTime) return true;
+                
+                // Flexible matching for common variations
+                const studentLower = normalizedStudentTime.toLowerCase().replace(/\s+/g, ' ');
+                const classLower = normalizedClassTime.toLowerCase().replace(/\s+/g, ' ');
+                
+                return studentLower === classLower;
             };
 
             // Filter students by batch time with smart format matching
             const filteredStudents = studentsResult.data.filter(student => {
                 if (!selectedClass.time) {
+                    console.log(`⚠️ No class time specified, including all students`);
                     return true; // If no specific time, include all students
                 }
                 
-                // Normalize both class and student batch times for comparison
-                const normalizedClassTime = normalizeBatchTime(selectedClass.time);
-                const normalizedStudentTime = normalizeBatchTime(student.batch_time);
+                const matches = timeMatches(student.batch_time, selectedClass.time);
                 
-                const matches = normalizedStudentTime === normalizedClassTime;
-                
-                // Debug log for the problematic case
-                if (student.batch_time && selectedClass.time) {
-                    console.log(`🔄 Batch matching for ${student.name}:`);
-                    console.log(`   Student: "${student.batch_time}" → "${normalizedStudentTime}"`);
-                    console.log(`   Class: "${selectedClass.time}" → "${normalizedClassTime}"`);
-                    console.log(`   Match: ${matches}`);
+                // Basic debug logging for matches
+                if (matches) {
+                    console.log(`✅ ${student.name} included (batch: ${student.batch_time})`);
+                } else {
+                    console.log(`❌ ${student.name} excluded (batch: ${student.batch_time})`);
                 }
                 
                 return matches;
             });
 
+            console.log(`👥 Students after filtering: ${filteredStudents.length}/${studentsResult.data.length}`);
+            
             setStudents(filteredStudents);
             console.log(`👥 Found ${filteredStudents.length} students for this class`);
 
@@ -322,7 +345,7 @@ const AttendanceModal = ({
                 <View style={styles.studentInfo}>
                     <Text style={styles.studentName}>{student.name}</Text>
                     <Text style={styles.studentDetails}>
-                        {student.email} • Age {student.age}
+                        {student.email} • {formatAgeWithDOB(student.date_of_birth)}
                     </Text>
                     {attendance.marked_by && (
                         <Text style={styles.markedByText}>

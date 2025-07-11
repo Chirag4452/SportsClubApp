@@ -14,8 +14,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { classService, formatTime, formatDate, getDateString } from '../services/classService';
+import { studentService } from '../services/studentService';
 import Calendar from '../components/Calendar';
 import AddClassModal from '../components/AddClassModal';
+import BulkClassSchedulingModal from '../components/BulkClassSchedulingModal';
 
 const ClassesScreen = () => {
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -26,7 +28,9 @@ const ClassesScreen = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showBulkModal, setShowBulkModal] = useState(false);
     const [error, setError] = useState(null);
+    const [students, setStudents] = useState([]);
     
     const { logout, user, userName } = useAuth();
 
@@ -43,6 +47,7 @@ const ClassesScreen = () => {
             // Reload data when classes are updated
             loadClasses();
             loadTodaysClasses();
+            loadStudents(); // Also reload students to keep counts accurate
         });
 
         return () => {
@@ -60,7 +65,8 @@ const ClassesScreen = () => {
         try {
             await Promise.all([
                 loadClasses(),
-                loadTodaysClasses()
+                loadTodaysClasses(),
+                loadStudents()
             ]);
         } catch (error) {
             console.error('Error loading initial data:', error);
@@ -111,6 +117,69 @@ const ClassesScreen = () => {
         }
     };
 
+    // Load students for eligibility calculation
+    const loadStudents = async () => {
+        try {
+            const result = await studentService.getStudentsBySport();
+            
+            if (result.success) {
+                setStudents(result.data);
+            } else {
+                console.error('Error loading students:', result.error);
+            }
+        } catch (error) {
+            console.error('Error loading students:', error);
+        }
+    };
+
+    // Helper function to normalize batch times for comparison (same as AttendanceModal)
+    const normalizeBatchTime = (batchTime) => {
+        if (!batchTime) return '';
+        
+        // Clean and normalize the time string
+        let normalizedTime = batchTime.trim();
+        
+        // Convert old format to new format for comparison
+        const batchMappings = {
+            'Morning (8-10)': 'Morning batch (8:00-10:00)',
+            'Evening (4-6)': 'Evening batch (4:00-6:00)',
+            '06:00 - 07:00': 'Morning batch (8:00-10:00)',
+            '16:00 - 18:00': 'Evening batch (4:00-6:00)',
+            '08:00 - 10:00': 'Morning batch (8:00-10:00)',
+            '04:00 - 06:00': 'Evening batch (4:00-6:00)',
+            '4:00-6:00': 'Evening batch (4:00-6:00)',
+            '8:00-10:00': 'Morning batch (8:00-10:00)',
+        };
+        
+        return batchMappings[normalizedTime] || normalizedTime;
+    };
+
+    // Check if student time matches class time (same logic as AttendanceModal)
+    const timeMatches = (studentTime, classTime) => {
+        if (!studentTime || !classTime) return false;
+        
+        const normalizedStudentTime = normalizeBatchTime(studentTime);
+        const normalizedClassTime = normalizeBatchTime(classTime);
+        
+        // Exact match
+        if (normalizedStudentTime === normalizedClassTime) return true;
+        
+        // Flexible matching for common variations
+        const studentLower = normalizedStudentTime.toLowerCase().replace(/\s+/g, ' ');
+        const classLower = normalizedClassTime.toLowerCase().replace(/\s+/g, ' ');
+        
+        return studentLower === classLower;
+    };
+
+    // Calculate eligible students for a class
+    const getEligibleStudentsCount = (classItem) => {
+        if (!classItem.time || students.length === 0) return 0;
+        
+        return students.filter(student => 
+            timeMatches(student.batch_time, classItem.time)
+        ).length;
+    };
+
     // Handle refresh
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -140,6 +209,29 @@ const ClassesScreen = () => {
             setSelectedDateClasses(prev => [...prev, newClass].sort((a, b) => a.time.localeCompare(b.time)));
         }
     }, [selectedDate]);
+
+    // Handle bulk classes creation
+    const handleBulkClassesCreated = useCallback((bulkResult) => {
+        console.log('Bulk classes created:', bulkResult);
+        
+        // Reload all data to reflect the new classes
+        loadInitialData();
+        
+        // Show success message
+        const { created, skipped, errors } = bulkResult;
+        let message = `Successfully created ${created.length} classes!`;
+        
+        if (skipped.length > 0) {
+            message += `\n${skipped.length} classes were skipped due to conflicts.`;
+        }
+        
+        if (errors.length > 0) {
+            message += `\n${errors.length} classes had errors.`;
+        }
+        
+        // Don't show alert here as it's already shown in the modal
+        console.log('Bulk creation summary:', message);
+    }, []);
 
     // Handle logout with confirmation
     const handleLogout = async () => {
@@ -171,37 +263,40 @@ const ClassesScreen = () => {
     };
 
     // Render class item
-    const renderClassItem = ({ item: classItem }) => (
-        <View style={styles.classItem}>
-            <View style={styles.classHeader}>
-                <View style={styles.classInfo}>
-                    <Text style={styles.classTitle}>{classItem.title}</Text>
-                    <Text style={styles.classSport}>{classItem.sport}</Text>
-                </View>
-                <View style={styles.classTime}>
-                    <Text style={styles.classTimeText}>{formatTime(classItem.time)}</Text>
-                </View>
-            </View>
-            
-            <View style={styles.classDetails}>
-                <View style={styles.classDetail}>
-                    <Ionicons name="person-outline" size={14} color="#6b7280" />
-                    <Text style={styles.classDetailText}>{classItem.instructor}</Text>
+    const renderClassItem = ({ item: classItem }) => {
+        const eligibleStudents = getEligibleStudentsCount(classItem);
+        
+        return (
+            <View style={styles.classItem}>
+                <View style={styles.classHeader}>
+                    <View style={styles.classInfo}>
+                        <Text style={styles.classTitle}>{classItem.title}</Text>
+                    </View>
+                    <View style={styles.classTime}>
+                        <Text style={styles.classTimeText}>{formatTime(classItem.time)}</Text>
+                    </View>
                 </View>
                 
-                <View style={styles.classDetail}>
-                    <Ionicons name="people-outline" size={14} color="#6b7280" />
-                    <Text style={styles.classDetailText}>
-                        {classItem.current_participants || 0}/{classItem.max_participants} enrolled
-                    </Text>
+                <View style={styles.classDetails}>
+                    <View style={styles.classDetail}>
+                        <Ionicons name="person-outline" size={14} color="#6b7280" />
+                        <Text style={styles.classDetailText}>{classItem.instructor}</Text>
+                    </View>
+                    
+                    <View style={styles.classDetail}>
+                        <Ionicons name="people-outline" size={14} color="#6b7280" />
+                        <Text style={styles.classDetailText}>
+                            {eligibleStudents} eligible students
+                        </Text>
+                    </View>
                 </View>
+                
+                {classItem.description && (
+                    <Text style={styles.classDescription}>{classItem.description}</Text>
+                )}
             </View>
-            
-            {classItem.description && (
-                <Text style={styles.classDescription}>{classItem.description}</Text>
-            )}
-        </View>
-    );
+        );
+    };
 
     // Render empty state
     const renderEmptyState = (message) => (
@@ -255,6 +350,13 @@ const ClassesScreen = () => {
                         </Text>
                     </View>
                     <View style={styles.headerActions}>
+                        <TouchableOpacity 
+                            style={styles.bulkButton}
+                            onPress={() => setShowBulkModal(true)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="calendar" size={18} color="#ffffff" />
+                        </TouchableOpacity>
                         <TouchableOpacity 
                             style={styles.addButton}
                             onPress={() => setShowAddModal(true)}
@@ -344,6 +446,13 @@ const ClassesScreen = () => {
                 visible={showAddModal}
                 onClose={() => setShowAddModal(false)}
                 onClassAdded={handleClassAdded}
+            />
+
+            {/* Bulk Class Scheduling Modal */}
+            <BulkClassSchedulingModal
+                visible={showBulkModal}
+                onClose={() => setShowBulkModal(false)}
+                onClassesCreated={handleBulkClassesCreated}
             />
         </SafeAreaView>
     );
@@ -445,6 +554,19 @@ const styles = StyleSheet.create({
     },
     disabledButton: {
         backgroundColor: '#9ca3af',
+    },
+    bulkButton: {
+        backgroundColor: '#4f46e5',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     selectedDateSection: {
         backgroundColor: '#ffffff',

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { classService, formatClassTime, getSportColor } from '../services/classService';
+import { classService, formatClassTime } from '../services/classService';
 import { 
     attendanceService, 
     formatAttendanceDate,
@@ -238,9 +238,6 @@ const AttendanceScreen = () => {
                             {classItem.title}
                         </Text>
                         <View style={styles.classDetails}>
-                            <View style={[styles.sportBadge, { backgroundColor: getSportColor(classItem.sport) }]}>
-                                <Text style={styles.sportText}>{classItem.sport}</Text>
-                            </View>
                             <Text style={[styles.classTime, isPast && styles.pastText]}>
                                 {formatClassTime(classItem.time)}
                             </Text>

@@ -3,7 +3,10 @@ import { databases, DATABASE_ID, ID, Query } from '../config/appwrite';
 // Collection ID for classes - you'll need to create this collection in Appwrite
 export const CLASSES_COLLECTION_ID = 'classes';
 
-// Sports options for dropdown
+// Default sport for this single-sport application
+export const DEFAULT_SPORT = 'Football';
+
+// Sports options for dropdown (kept for backward compatibility)
 export const SPORTS_OPTIONS = [
     'Football',
     'Basketball',
@@ -59,10 +62,7 @@ class ClassService {
      */
     async createClass(classData) {
         try {
-            console.log('🔧 ClassService: Starting class creation...');
-            console.log('📊 Database ID:', DATABASE_ID);
-            console.log('📚 Collection ID:', CLASSES_COLLECTION_ID);
-            console.log('📝 Class data:', classData);
+            console.log('🔧 ClassService: Creating class:', classData.title);
 
             const now = new Date().toISOString();
             
@@ -80,7 +80,7 @@ class ClassService {
                 updated_at: now, // Changed to snake_case
             };
 
-            console.log('📄 Final document to save:', classDocument);
+
 
             const result = await databases.createDocument(
                 DATABASE_ID,
@@ -118,13 +118,15 @@ class ClassService {
     /**
      * Get all classes with optional filtering
      * @param {Object} [filters] - Optional filters
-     * @param {string} [filters.date] - Filter by specific date (YYYY-MM-DD)
-     * @param {string} [filters.sport] - Filter by sport
+     * @param {string} [filters.status] - Filter by status
+     * @param {string} [filters.date] - Filter by date (YYYY-MM-DD)
      * @param {number} [filters.limit] - Limit number of results
      * @returns {Promise<Object>} Classes array or error
      */
     async getClasses(filters = {}) {
         try {
+            console.log('🔍 ClassService: Getting classes with filters:', filters);
+            
             const queries = [];
             
             // Add date filter if provided
@@ -132,19 +134,13 @@ class ClassService {
                 queries.push(Query.equal('date', filters.date));
             }
             
-            // Add sport filter if provided
-            if (filters.sport) {
-                queries.push(Query.equal('sport', filters.sport));
-            }
-            
             // Add limit if provided
             if (filters.limit) {
                 queries.push(Query.limit(filters.limit));
             }
             
-            // Order by date and time
-            queries.push(Query.orderAsc('date'));
-            queries.push(Query.orderAsc('time'));
+            // Order by date (newest first)
+            queries.push(Query.orderDesc('date'));
 
             const result = await databases.listDocuments(
                 DATABASE_ID,
@@ -152,9 +148,10 @@ class ClassService {
                 queries
             );
 
+            console.log(`✅ ClassService: Found ${result.documents.length} classes`);
             return { success: true, data: result.documents };
         } catch (error) {
-            console.error('Error fetching classes:', error);
+            console.error('❌ ClassService: Error fetching classes:', error);
             
             let errorMessage = 'Failed to load classes. Please try again.';
             if (error.code === 401) {
@@ -180,7 +177,7 @@ class ClassService {
                 Query.lessThanEqual('date', endDate),
                 Query.orderAsc('date'),
                 Query.orderAsc('time'),
-                Query.limit(100) // Reasonable limit for monthly view
+                Query.limit(500) // Increased from 100 to handle bulk operations
             ];
 
             const result = await databases.listDocuments(
@@ -335,14 +332,8 @@ class ClassService {
             const stats = {
                 totalClasses: classes.length,
                 todaysClasses: classes.filter(cls => cls.date === today).length,
-                sportsCount: {},
                 upcomingClasses: classes.filter(cls => cls.date >= today).length,
             };
-
-            // Count classes by sport
-            classes.forEach(cls => {
-                stats.sportsCount[cls.sport] = (stats.sportsCount[cls.sport] || 0) + 1;
-            });
 
             return { success: true, data: stats };
         } catch (error) {
@@ -350,6 +341,327 @@ class ClassService {
             return { success: false, error: error.message || 'Failed to load class statistics' };
         }
     }
+
+    /**
+     * Generate a list of dates between start and end date
+     * @param {string} startDate - Start date (YYYY-MM-DD)
+     * @param {string} endDate - End date (YYYY-MM-DD)
+     * @param {number[]} selectedDays - Array of day numbers (0=Sunday, 1=Monday, etc.)
+     * @param {string[]} skipDates - Array of dates to skip (YYYY-MM-DD)
+     * @returns {string[]} Array of dates
+     */
+    generateDateRange(startDate, endDate, selectedDays = [1,2,3,4,5], skipDates = []) {
+        const dates = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const skipSet = new Set(skipDates);
+        
+        // Iterate through each day from start to end
+        for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+            const dateString = date.toISOString().split('T')[0];
+            const dayOfWeek = date.getDay();
+            
+            // Include if day is selected and not in skip list
+            if (selectedDays.includes(dayOfWeek) && !skipSet.has(dateString)) {
+                dates.push(dateString);
+            }
+        }
+        
+        return dates;
+    }
+
+    /**
+     * Preview bulk class creation without actually creating them
+     * @param {Object} bulkData - Bulk scheduling parameters
+     * @param {string} bulkData.startDate - Start date (YYYY-MM-DD)
+     * @param {string} bulkData.endDate - End date (YYYY-MM-DD)
+     * @param {number[]} bulkData.selectedDays - Days of week (0=Sunday, 1=Monday, etc.)
+     * @param {string[]} bulkData.selectedTimes - Array of batch times
+     * @param {string[]} bulkData.skipDates - Dates to skip
+     * @param {string} bulkData.instructor - Instructor name
+     * @param {string} bulkData.instructorId - Instructor ID
+     * @param {string} bulkData.titleTemplate - Title template (e.g., "Football Training")
+     * @returns {Promise<Object>} Preview data with classes and conflicts
+     */
+    async previewBulkClasses(bulkData) {
+        try {
+            const {
+                startDate,
+                endDate,
+                selectedDays,
+                selectedTimes,
+                skipDates = [],
+                instructor,
+                instructorId,
+                titleTemplate = "Football Training"
+            } = bulkData;
+
+            // Generate all dates
+            const dates = this.generateDateRange(startDate, endDate, selectedDays, skipDates);
+            
+            // Create preview classes
+            const previewClasses = [];
+            const totalClasses = dates.length * selectedTimes.length;
+            
+            dates.forEach(date => {
+                selectedTimes.forEach(time => {
+                    previewClasses.push({
+                        title: titleTemplate,
+                        sport: DEFAULT_SPORT,
+                        date,
+                        time,
+                        instructor,
+                        instructor_id: instructorId,
+                        description: `Auto-generated class for ${date}`,
+                        max_participants: 20
+                    });
+                });
+            });
+
+            // Check for conflicts with existing classes
+            const existingClasses = await this.getClassesInDateRange(startDate, endDate);
+            const conflicts = [];
+            
+            if (existingClasses.success) {
+                previewClasses.forEach(previewClass => {
+                    const conflict = existingClasses.data.find(existing => 
+                        existing.date === previewClass.date && 
+                        existing.time === previewClass.time
+                    );
+                    if (conflict) {
+                        conflicts.push({
+                            date: previewClass.date,
+                            time: previewClass.time,
+                            existingClass: conflict
+                        });
+                    }
+                });
+            }
+
+            return {
+                success: true,
+                data: {
+                    previewClasses,
+                    totalClasses,
+                    conflicts,
+                    dateRange: { startDate, endDate },
+                    selectedDays,
+                    selectedTimes
+                }
+            };
+        } catch (error) {
+            console.error('Error previewing bulk classes:', error);
+            return { success: false, error: error.message || 'Failed to preview classes' };
+        }
+    }
+
+    /**
+     * Create multiple classes in bulk
+     * @param {Object} bulkData - Bulk scheduling parameters
+     * @param {string} bulkData.startDate - Start date (YYYY-MM-DD)
+     * @param {string} bulkData.endDate - End date (YYYY-MM-DD)
+     * @param {number[]} bulkData.selectedDays - Days of week (0=Sunday, 1=Monday, etc.)
+     * @param {string[]} bulkData.selectedTimes - Array of batch times
+     * @param {string[]} bulkData.skipDates - Dates to skip
+     * @param {string} bulkData.instructor - Instructor name
+     * @param {string} bulkData.instructorId - Instructor ID
+     * @param {string} bulkData.titleTemplate - Title template
+     * @param {boolean} bulkData.skipConflicts - Whether to skip conflicting classes
+     * @returns {Promise<Object>} Bulk creation result
+     */
+    async createBulkClasses(bulkData) {
+        try {
+            const {
+                startDate,
+                endDate,
+                selectedDays,
+                selectedTimes,
+                skipDates = [],
+                instructor,
+                instructorId,
+                titleTemplate = "Football Training",
+                skipConflicts = true
+            } = bulkData;
+
+            console.log('🔧 Starting bulk class creation...');
+            
+            // First, get preview to check for conflicts
+            const preview = await this.previewBulkClasses(bulkData);
+            if (!preview.success) {
+                return preview;
+            }
+
+            const { previewClasses, conflicts } = preview.data;
+            let classesToCreate = previewClasses;
+
+            // Filter out conflicts if requested
+            if (skipConflicts && conflicts.length > 0) {
+                const conflictSet = new Set(
+                    conflicts.map(c => `${c.date}-${c.time}`)
+                );
+                classesToCreate = previewClasses.filter(
+                    cls => !conflictSet.has(`${cls.date}-${cls.time}`)
+                );
+            }
+            
+            // Limit bulk operations to prevent overwhelming the system
+            const MAX_BULK_SIZE = 100;
+            if (classesToCreate.length > MAX_BULK_SIZE) {
+                return { 
+                    success: false, 
+                    error: `Bulk operation too large. Maximum ${MAX_BULK_SIZE} classes per batch. You requested ${classesToCreate.length} classes. Please use a smaller date range or fewer batch times.` 
+                };
+            }
+
+            const results = {
+                created: [],
+                skipped: [],
+                errors: []
+            };
+
+            console.log(`📝 Creating ${classesToCreate.length} classes...`);
+
+            // Create classes one by one with rate limiting protection
+            for (let i = 0; i < classesToCreate.length; i++) {
+                const classData = classesToCreate[i];
+                
+                try {
+                    const result = await this.createClass({
+                        ...classData,
+                        instructorId: classData.instructor_id, // Map snake_case to camelCase for createClass compatibility
+                        maxParticipants: classData.max_participants
+                    });
+                    
+                    if (result.success) {
+                        results.created.push({
+                            ...result.data,
+                            date: classData.date,
+                            time: classData.time
+                        });
+                    } else {
+                        results.errors.push({
+                            date: classData.date,
+                            time: classData.time,
+                            error: result.error
+                        });
+                    }
+                    
+                    // Add small delay to prevent rate limiting (every 10 operations)
+                    if (i > 0 && (i + 1) % 10 === 0) {
+                        console.log(`⏳ Rate limiting pause after ${i + 1} operations...`);
+                        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms pause
+                    }
+                    
+                } catch (error) {
+                    results.errors.push({
+                        date: classData.date,
+                        time: classData.time,
+                        error: error.message
+                    });
+                }
+            }
+
+            // Add skipped conflicts to results
+            if (skipConflicts) {
+                results.skipped = conflicts.map(c => ({
+                    date: c.date,
+                    time: c.time,
+                    reason: 'Conflict with existing class'
+                }));
+            }
+
+            console.log(`✅ Bulk creation completed:`, {
+                created: results.created.length,
+                skipped: results.skipped.length,
+                errors: results.errors.length
+            });
+
+            return {
+                success: true,
+                data: results
+            };
+        } catch (error) {
+            console.error('❌ Error in bulk class creation:', error);
+            return { success: false, error: error.message || 'Failed to create bulk classes' };
+        }
+    }
+
+    /**
+     * Delete multiple classes by date range
+     * @param {string} startDate - Start date (YYYY-MM-DD)
+     * @param {string} endDate - End date (YYYY-MM-DD)
+     * @param {string[]} selectedTimes - Optional: only delete classes at these times
+     * @returns {Promise<Object>} Deletion result
+     */
+    async deleteBulkClasses(startDate, endDate, selectedTimes = []) {
+        try {
+            // Get classes in the date range
+            const classesResult = await this.getClassesInDateRange(startDate, endDate);
+            if (!classesResult.success) {
+                return classesResult;
+            }
+
+            let classesToDelete = classesResult.data;
+
+            // Filter by times if specified
+            if (selectedTimes.length > 0) {
+                classesToDelete = classesToDelete.filter(cls => 
+                    selectedTimes.includes(cls.time)
+                );
+            }
+
+            const results = {
+                deleted: [],
+                errors: []
+            };
+
+            console.log(`🗑️ Deleting ${classesToDelete.length} classes...`);
+
+            // Delete classes one by one
+            for (const classItem of classesToDelete) {
+                try {
+                    const result = await this.deleteClass(classItem.$id);
+                    if (result.success) {
+                        results.deleted.push({
+                            id: classItem.$id,
+                            title: classItem.title,
+                            date: classItem.date,
+                            time: classItem.time
+                        });
+                    } else {
+                        results.errors.push({
+                            id: classItem.$id,
+                            date: classItem.date,
+                            time: classItem.time,
+                            error: result.error
+                        });
+                    }
+                } catch (error) {
+                    results.errors.push({
+                        id: classItem.$id,
+                        date: classItem.date,
+                        time: classItem.time,
+                        error: error.message
+                    });
+                }
+            }
+
+            console.log(`✅ Bulk deletion completed:`, {
+                deleted: results.deleted.length,
+                errors: results.errors.length
+            });
+
+            return {
+                success: true,
+                data: results
+            };
+        } catch (error) {
+            console.error('❌ Error in bulk class deletion:', error);
+            return { success: false, error: error.message || 'Failed to delete bulk classes' };
+        }
+    }
+
+
 }
 
 // Export singleton instance

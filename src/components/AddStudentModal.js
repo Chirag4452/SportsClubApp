@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { studentService, BATCH_TIME_OPTIONS } from '../services/studentService';
-import { SPORTS_OPTIONS } from '../services/classService';
+import { DEFAULT_SPORT } from '../services/classService';
 
 const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
     // Form state
@@ -22,8 +22,7 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
         name: '',
         phone: '',
         email: '',
-        age: '',
-        sport: SPORTS_OPTIONS[0],
+        date_of_birth: '',
         batch_time: BATCH_TIME_OPTIONS[0],
         notes: '',
     });
@@ -31,7 +30,6 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
     // UI state
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState({});
-    const [showSportDropdown, setShowSportDropdown] = useState(false);
     const [showBatchTimeDropdown, setShowBatchTimeDropdown] = useState(false);
 
     // Reset form when modal opens/closes
@@ -46,8 +44,7 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
             name: '',
             phone: '',
             email: '',
-            age: '',
-            sport: SPORTS_OPTIONS[0],
+            date_of_birth: '',
             batch_time: BATCH_TIME_OPTIONS[0],
             notes: '',
         });
@@ -66,11 +63,6 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
     };
 
     // Selection handlers
-    const handleSportSelect = (sport) => {
-        handleInputChange('sport', sport);
-        setShowSportDropdown(false);
-    };
-
     const handleBatchTimeSelect = (batchTime) => {
         handleInputChange('batch_time', batchTime);
         setShowBatchTimeDropdown(false);
@@ -110,19 +102,26 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
             }
         }
 
-        // Age validation (stored as string in database)
-        if (!formData.age.trim()) {
-            newErrors.age = 'Age is required';
+        // Date of birth validation
+        if (!formData.date_of_birth.trim()) {
+            newErrors.date_of_birth = 'Date of birth is required';
         } else {
-            const age = parseInt(formData.age.trim(), 10);
-            if (isNaN(age) || age < 1 || age > 120) {
-                newErrors.age = 'Please enter a valid age (1-120)';
+            const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dobRegex.test(formData.date_of_birth.trim())) {
+                newErrors.date_of_birth = 'Please enter date in YYYY-MM-DD format';
+            } else {
+                const dob = new Date(formData.date_of_birth.trim());
+                const today = new Date();
+                const age = Math.floor((today - dob) / (365.25 * 24 * 60 * 60 * 1000));
+                
+                if (isNaN(dob.getTime())) {
+                    newErrors.date_of_birth = 'Please enter a valid date';
+                } else if (dob > today) {
+                    newErrors.date_of_birth = 'Date of birth cannot be in the future';
+                } else if (age < 1 || age > 120) {
+                    newErrors.date_of_birth = 'Age must be between 1 and 120 years';
+                }
             }
-        }
-
-        // Sport validation
-        if (!formData.sport) {
-            newErrors.sport = 'Please select a sport';
         }
 
         // Batch time validation
@@ -161,8 +160,8 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
                 name: formData.name.trim(),
                 phone: formData.phone.trim(),
                 email: formData.email.trim(),
-                age: formData.age.trim(),
-                sport: formData.sport,
+                date_of_birth: formData.date_of_birth.trim(),
+                sport: DEFAULT_SPORT, // Use default sport for single-sport app
                 batch_time: formData.batch_time,
                 // notes: formData.notes.trim(), // Comment out if notes attribute doesn't exist
             };
@@ -305,34 +304,19 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
                         {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
                     </View>
 
-                    {/* Age */}
+                    {/* Date of Birth */}
                     <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Age *</Text>
+                        <Text style={styles.label}>Date of Birth *</Text>
                         <TextInput
-                            style={[styles.input, errors.age && styles.inputError]}
-                            value={formData.age}
-                            onChangeText={(value) => handleInputChange('age', value)}
-                            placeholder="e.g., 25"
+                            style={[styles.input, errors.date_of_birth && styles.inputError]}
+                            value={formData.date_of_birth}
+                            onChangeText={(value) => handleInputChange('date_of_birth', value)}
+                            placeholder="YYYY-MM-DD (e.g., 1990-05-15)"
                             placeholderTextColor="#9ca3af"
                             editable={!isLoading}
-                            keyboardType="numeric"
-                            maxLength={3}
+                            maxLength={10}
                         />
-                        {errors.age && <Text style={styles.errorText}>{errors.age}</Text>}
-                    </View>
-
-                    {/* Sport Selection */}
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Sport *</Text>
-                        <TouchableOpacity
-                            style={[styles.dropdownButton, errors.sport && styles.inputError]}
-                            onPress={() => setShowSportDropdown(true)}
-                            disabled={isLoading}
-                        >
-                            <Text style={styles.dropdownText}>{formData.sport}</Text>
-                            <Ionicons name="chevron-down" size={20} color="#6b7280" />
-                        </TouchableOpacity>
-                        {errors.sport && <Text style={styles.errorText}>{errors.sport}</Text>}
+                        {errors.date_of_birth && <Text style={styles.errorText}>{errors.date_of_birth}</Text>}
                     </View>
 
                     {/* Batch Time Selection */}
@@ -368,40 +352,6 @@ const AddStudentModal = ({ visible, onClose, onStudentAdded }) => {
                     </View>
                     */}
                 </ScrollView>
-
-                {/* Sport Selection Modal */}
-                <Modal
-                    visible={showSportDropdown}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={() => setShowSportDropdown(false)}
-                >
-                    <TouchableOpacity 
-                        style={styles.modalOverlay}
-                        activeOpacity={1}
-                        onPress={() => setShowSportDropdown(false)}
-                    >
-                        <View style={styles.dropdownModal}>
-                            <View style={styles.dropdownHeader}>
-                                <Text style={styles.dropdownTitle}>Select Sport</Text>
-                                <TouchableOpacity onPress={() => setShowSportDropdown(false)}>
-                                    <Ionicons name="close" size={24} color="#6b7280" />
-                                </TouchableOpacity>
-                            </View>
-                            <FlatList
-                                data={SPORTS_OPTIONS}
-                                keyExtractor={(item) => item}
-                                renderItem={({ item }) => renderDropdownOption({
-                                    item,
-                                    selectedValue: formData.sport,
-                                    onSelect: handleSportSelect,
-                                    isSelected: formData.sport === item
-                                })}
-                                showsVerticalScrollIndicator={false}
-                            />
-                        </View>
-                    </TouchableOpacity>
-                </Modal>
 
                 {/* Batch Time Selection Modal */}
                 <Modal
