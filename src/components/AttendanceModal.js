@@ -154,10 +154,17 @@ const AttendanceModal = ({
             setStudents(filteredStudents);
             console.log(`👥 Found ${filteredStudents.length} students for this class`);
 
+            // Ensure classDate is in YYYY-MM-DD format (handle ISO strings or Date objects)
+            const formattedClassDate = typeof classDate === 'string' && classDate.includes('T') 
+                ? classDate.split('T')[0] 
+                : (classDate instanceof Date ? classDate.toISOString().split('T')[0] : classDate);
+
+            console.log('📅 Loading attendance for formatted class date:', formattedClassDate);
+
             // Load existing attendance for this class and date
             const attendanceResult = await attendanceService.getAttendanceForClass(
                 selectedClass.$id, 
-                classDate
+                formattedClassDate
             );
 
             if (attendanceResult.success) {
@@ -283,6 +290,13 @@ const AttendanceModal = ({
         try {
             console.log('💾 Saving attendance for', students.length, 'students');
 
+            // Ensure classDate is in YYYY-MM-DD format (handle ISO strings or Date objects)
+            const formattedClassDate = typeof classDate === 'string' && classDate.includes('T') 
+                ? classDate.split('T')[0] 
+                : (classDate instanceof Date ? classDate.toISOString().split('T')[0] : classDate);
+
+            console.log('📅 Using formatted class date:', formattedClassDate);
+
             // Prepare attendance updates
             const attendanceUpdates = students.map(student => ({
                 student_id: student.$id,
@@ -295,7 +309,7 @@ const AttendanceModal = ({
             const result = await attendanceService.bulkUpdateAttendance(
                 attendanceUpdates,
                 selectedClass.$id,
-                classDate,
+                formattedClassDate,
                 userName || 'Unknown Instructor'
             );
 

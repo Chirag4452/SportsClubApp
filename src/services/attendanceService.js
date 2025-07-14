@@ -39,19 +39,26 @@ class AttendanceService {
             console.log('📚 Collection ID:', ATTENDANCE_COLLECTION_ID);
             console.log('📝 Attendance data:', attendanceData);
 
+            // Ensure class_date is in YYYY-MM-DD format (max 10 chars for database)
+            const formattedClassDate = typeof attendanceData.class_date === 'string' && attendanceData.class_date.includes('T')
+                ? attendanceData.class_date.split('T')[0]
+                : (attendanceData.class_date instanceof Date ? attendanceData.class_date.toISOString().split('T')[0] : attendanceData.class_date);
+
+            console.log('📅 Formatted class_date for database:', formattedClassDate);
+
             const now = new Date().toISOString();
             
             // Check if attendance already exists for this student in this class on this date
             const existingAttendance = await this.getAttendanceRecord(
                 attendanceData.class_id,
                 attendanceData.student_id,
-                attendanceData.class_date
+                formattedClassDate
             );
 
             const attendanceDocument = {
                 class_id: attendanceData.class_id,
                 student_id: attendanceData.student_id,
-                class_date: attendanceData.class_date,
+                class_date: formattedClassDate,
                 is_present: attendanceData.is_present ? 'true' : 'false',
                 payment_complete: attendanceData.payment_complete ? 'true' : 'false',
                 marked_by: attendanceData.marked_by,
@@ -155,9 +162,14 @@ class AttendanceService {
      */
     async getAttendanceForClass(classId, classDate) {
         try {
+            // Ensure classDate is in YYYY-MM-DD format
+            const formattedClassDate = typeof classDate === 'string' && classDate.includes('T')
+                ? classDate.split('T')[0]
+                : (classDate instanceof Date ? classDate.toISOString().split('T')[0] : classDate);
+
             const queries = [
                 Query.equal('class_id', classId),
-                Query.equal('class_date', classDate),
+                Query.equal('class_date', formattedClassDate),
                 Query.orderAsc('created_at')
             ];
 
