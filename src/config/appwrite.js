@@ -30,7 +30,7 @@ const client = new Client();
 client
     .setEndpoint(APPWRITE_CONFIG.endpoint)
     .setProject(APPWRITE_CONFIG.projectId)
-    .setPlatform('com.sportsclub.app'); // Set platform for React Native
+    .setPlatform('com.kickbutowski63.SportsClubApp'); // Set platform for React Native
 
 // Initialize services
 export const account = new Account(client);
